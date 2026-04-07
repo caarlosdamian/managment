@@ -206,9 +206,9 @@ const navigation = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ isOpen = false, closeMenu = () => {} }: { isOpen?: boolean; closeMenu?: () => void }) {
   return (
-    <aside className="sidebar" id="main-sidebar">
+    <aside className={`sidebar ${isOpen ? "sidebar--open" : ""}`} id="main-sidebar">
       {/* Brand */}
       <div className="sidebar-brand">
         <div className="sidebar-logo">
@@ -237,6 +237,7 @@ export function Sidebar() {
               <NavLink
                 to={item.to}
                 end={item.to === "/"}
+                onClick={closeMenu}
                 className={({ isActive }) =>
                   `sidebar-link ${isActive ? "sidebar-link--active" : ""}`
                 }

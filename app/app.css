@@ -2107,18 +2107,95 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Mobile Overlays & Header Base */
+.mobile-header {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.mobile-header-brand {
+  display: flex;
+  align-items: center;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--color-text);
+  gap: 12px;
+}
+
+.mobile-header-brand .sidebar-logo {
+  width: 32px;
+  height: 32px;
+}
+.mobile-header-brand .sidebar-logo svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mobile-menu-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-overlay {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 45;
+  backdrop-filter: blur(2px);
+}
+
 /* ── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 768px) {
+  .app-layout {
+    flex-direction: column;
+  }
+
+  .mobile-header {
+    display: flex;
+  }
+  
   .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
     transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar.sidebar--open {
+    transform: translateX(0);
   }
 
   .app-main {
     margin-left: 0;
+    width: 100%;
   }
 
   .page {
-    padding: 24px 20px;
+    padding: 20px 16px;
+  }
+  
+  .page-header {
+    margin-bottom: 24px;
   }
 
   .stats-grid {
@@ -2127,6 +2204,8 @@ body {
 
   .pos-layout {
     grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
   }
 
   .pos-cart {
@@ -2134,14 +2213,31 @@ body {
     height: auto;
     border-left: none;
     border-top: 1px solid var(--color-border);
+    margin-top: 24px;
   }
 
   .inv-stats {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
 
   .inv-table-wrapper {
     overflow-x: auto;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+  
+  /* Make sure internal elements can stretch */
+  .inv-table {
+    min-width: 800px; /* Minimum width to prevent collapsing inputs and columns */
+  }
+  
+  /* Additional scrollable tables like sales history */
+  .sales-table-wrapper, .sales-history, .sales-sessions {
+    overflow-x: auto;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
   }
 
   .form-row {
@@ -2150,20 +2246,16 @@ body {
   }
 
   .modal {
-    max-width: 100%;
-    margin: 16px;
+    max-width: calc(100vw - 32px);
+    margin: 16px auto;
   }
 
   .roast-card-details {
     display: none;
   }
 
-  .roast-stats {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .roast-expanded-grid {
-    grid-template-columns: 1fr 1fr;
+  .roast-stats, .roast-expanded-grid {
+    grid-template-columns: 1fr;
   }
 }
 
