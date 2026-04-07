@@ -382,25 +382,33 @@ export default function POS() {
           <input type="text" placeholder="Search products..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pos-search-input" />
         </div>
 
-        {/* Categories */}
-        <div className="pos-categories" id="pos-categories">
-          {categories.map((cat) => (
-            <button key={cat} className={`pos-category-btn ${activeCategory === cat ? "pos-category-btn--active" : ""}`} onClick={() => setActiveCategory(cat)}>
-              {cat}
-            </button>
-          ))}
-        </div>
-
         {/* Product Grid */}
-        <div className="pos-product-grid" id="pos-product-grid">
-          {filteredProducts.map((product) => (
-            <button key={product._id} className="pos-product-card" onClick={() => addToCart(product)} id={`product-${product._id}`}>
-              <span className="pos-product-emoji">{product.emoji}</span>
-              <span className="pos-product-name">{product.name}</span>
-              <span className="pos-product-price">${product.price.toFixed(2)}</span>
-            </button>
-          ))}
-        </div>
+        {(products as Product[]).length === 0 ? (
+          <div className="empty-state" style={{ padding: "64px 24px", marginTop: "32px", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "16px", flex: 1, margin: 24, alignSelf: "flex-start" }}>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="empty-state-icon">
+              <circle cx="9" cy="21" r="1"></circle>
+              <circle cx="20" cy="21" r="1"></circle>
+              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+            </svg>
+            <h2>No items in POS</h2>
+            <p>Add items to inventory and check "Include in POS" to see them here.</p>
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="empty-state" style={{ padding: "64px 24px", marginTop: "32px", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "16px", flex: 1, margin: 24, alignSelf: "flex-start" }}>
+            <h2>No products found</h2>
+            <p>No products match your current category or search.</p>
+          </div>
+        ) : (
+          <div className="pos-product-grid" id="pos-product-grid">
+            {filteredProducts.map((product) => (
+              <button key={product._id} className="pos-product-card" onClick={() => addToCart(product)} id={`product-${product._id}`}>
+                <span className="pos-product-emoji">{product.emoji}</span>
+                <span className="pos-product-name">{product.name}</span>
+                <span className="pos-product-price">${product.price.toFixed(2)}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Cart Panel ────────────────────────────── */}
