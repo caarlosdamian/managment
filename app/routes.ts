@@ -6,7 +6,10 @@ import {
 } from "@react-router/dev/routes";
 
 export default [
-  layout("components/sidebar-layout.tsx", [
+  route("login", "routes/login.tsx"),
+  route("logout", "routes/logout.tsx"),
+
+  layout("routes/protected-layout.tsx", [
     index("routes/home.tsx"),
     route("pos", "routes/pos.tsx"),
     route("sales", "routes/sales.tsx"),
