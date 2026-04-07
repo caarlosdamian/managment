@@ -1,5 +1,8 @@
 import { useState } from "react";
+import { useLoaderData, useFetcher } from "react-router";
 import type { Route } from "./+types/roasting";
+import { connectDB } from "~/db/connection.server";
+import { RoastBatch } from "~/db/models/roast.server";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -8,93 +11,85 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-interface RoastBatch {
-  id: number;
-  beanName: string;
-  beanOrigin: string;
-  greenWeight: number; // grams
-  roastedWeight: number; // grams
-  roastDate: string; // YYYY-MM-DD
-  agtron: number; // Agtron scale (25-95)
-  duration: number; // minutes
-  temperature: number; // °F
-  notes: string;
+// ─── Server Loader ────────────────────────────────────────
+export async function loader() {
+  await connectDB();
+  const batches = await RoastBatch.find().sort({ roastDate: -1 }).lean();
+  return {
+    batches: batches.map((b) => ({
+      _id: b._id.toString(),
+      beanName: b.beanName,
+      beanOrigin: b.beanOrigin,
+      greenWeight: b.greenWeight,
+      roastedWeight: b.roastedWeight,
+      roastDate: b.roastDate instanceof Date ? b.roastDate.toISOString().split("T")[0] : String(b.roastDate).split("T")[0],
+      agtron: b.agtron,
+      duration: b.duration,
+      temperature: b.temperature,
+      notes: b.notes,
+    })),
+  };
 }
 
-const initialRoasts: RoastBatch[] = [
-  {
-    id: 1,
-    beanName: "Ethiopian Yirgacheffe",
-    beanOrigin: "Ethiopia",
-    greenWeight: 5000,
-    roastedWeight: 4250,
-    roastDate: "2026-04-07",
-    agtron: 80,
-    duration: 11,
-    temperature: 410,
-    notes: "Bright acidity, floral aroma. First crack at 9 min.",
-  },
-  {
-    id: 2,
-    beanName: "Colombian Supremo",
-    beanOrigin: "Colombia",
-    greenWeight: 8000,
-    roastedWeight: 6720,
-    roastDate: "2026-04-06",
-    agtron: 58,
-    duration: 13,
-    temperature: 430,
-    notes: "Balanced body, caramel sweetness. Good for espresso.",
-  },
-  {
-    id: 3,
-    beanName: "Sumatra Mandheling",
-    beanOrigin: "Indonesia",
-    greenWeight: 6000,
-    roastedWeight: 4920,
-    roastDate: "2026-04-05",
-    agtron: 35,
-    duration: 16,
-    temperature: 460,
-    notes: "Full body, earthy with herbal notes. Second crack at 14 min.",
-  },
-  {
-    id: 4,
-    beanName: "Guatemala Antigua",
-    beanOrigin: "Guatemala",
-    greenWeight: 4000,
-    roastedWeight: 3440,
-    roastDate: "2026-04-04",
-    agtron: 48,
-    duration: 14,
-    temperature: 445,
-    notes: "Chocolate and spice notes. Rich, smooth finish.",
-  },
-  {
-    id: 5,
-    beanName: "Kenya AA",
-    beanOrigin: "Kenya",
-    greenWeight: 3000,
-    roastedWeight: 2580,
-    roastDate: "2026-04-03",
-    agtron: 85,
-    duration: 10,
-    temperature: 405,
-    notes: "Bright citrus acidity, blackcurrant. Complex cup.",
-  },
-];
+// ─── Server Action ────────────────────────────────────────
+export async function action({ request }: Route.ActionArgs) {
+  await connectDB();
+  const formData = await request.formData();
+  const intent = formData.get("intent") as string;
 
-const emptyForm: Omit<RoastBatch, "id"> = {
-  beanName: "",
-  beanOrigin: "",
-  greenWeight: 0,
-  roastedWeight: 0,
-  roastDate: new Date().toISOString().split("T")[0],
-  agtron: 55,
-  duration: 0,
-  temperature: 0,
-  notes: "",
-};
+  switch (intent) {
+    case "create": {
+      await RoastBatch.create({
+        beanName: formData.get("beanName"),
+        beanOrigin: formData.get("beanOrigin"),
+        greenWeight: Number(formData.get("greenWeight")),
+        roastedWeight: Number(formData.get("roastedWeight")),
+        roastDate: new Date(formData.get("roastDate") as string),
+        agtron: Number(formData.get("agtron")),
+        duration: Number(formData.get("duration")),
+        temperature: Number(formData.get("temperature")),
+        notes: formData.get("notes") || "",
+      });
+      break;
+    }
+    case "update": {
+      const id = formData.get("id") as string;
+      await RoastBatch.findByIdAndUpdate(id, {
+        beanName: formData.get("beanName"),
+        beanOrigin: formData.get("beanOrigin"),
+        greenWeight: Number(formData.get("greenWeight")),
+        roastedWeight: Number(formData.get("roastedWeight")),
+        roastDate: new Date(formData.get("roastDate") as string),
+        agtron: Number(formData.get("agtron")),
+        duration: Number(formData.get("duration")),
+        temperature: Number(formData.get("temperature")),
+        notes: formData.get("notes") || "",
+      });
+      break;
+    }
+    case "delete": {
+      const id = formData.get("id") as string;
+      await RoastBatch.findByIdAndDelete(id);
+      break;
+    }
+  }
+
+  return { ok: true };
+}
+
+// ─── Types ────────────────────────────────────────────────
+interface RoastBatchData {
+  _id: string;
+  beanName: string;
+  beanOrigin: string;
+  greenWeight: number;
+  roastedWeight: number;
+  roastDate: string;
+  agtron: number;
+  duration: number;
+  temperature: number;
+  notes: string;
+}
 
 /**
  * Agtron Scale Reference:
@@ -117,26 +112,43 @@ function getAgtronInfo(agtron: number) {
   return { label: "Very Dark", bg: "rgba(40, 20, 10, 0.15)", color: "#28140a", dot: "#28140a" };
 }
 
+// ─── Component ────────────────────────────────────────────
 export default function Roasting() {
-  const [batches, setBatches] = useState<RoastBatch[]>(initialRoasts);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingBatch, setEditingBatch] = useState<RoastBatch | null>(null);
-  const [formData, setFormData] = useState(emptyForm);
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const { batches } = useLoaderData<typeof loader>();
+  const fetcher = useFetcher();
 
-  const totalGreen = batches.reduce((s, b) => s + b.greenWeight, 0);
-  const totalRoasted = batches.reduce((s, b) => s + b.roastedWeight, 0);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingBatch, setEditingBatch] = useState<RoastBatchData | null>(null);
+  const [formData, setFormData] = useState({
+    beanName: "",
+    beanOrigin: "",
+    greenWeight: 0,
+    roastedWeight: 0,
+    roastDate: new Date().toISOString().split("T")[0],
+    agtron: 55,
+    duration: 0,
+    temperature: 0,
+    notes: "",
+  });
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const batchList = batches as RoastBatchData[];
+  const totalGreen = batchList.reduce((s, b) => s + b.greenWeight, 0);
+  const totalRoasted = batchList.reduce((s, b) => s + b.roastedWeight, 0);
   const avgLoss = totalGreen > 0 ? ((1 - totalRoasted / totalGreen) * 100).toFixed(1) : "0";
-  const avgDuration = batches.length > 0 ? (batches.reduce((s, b) => s + b.duration, 0) / batches.length).toFixed(1) : "0";
+  const avgDuration = batchList.length > 0 ? (batchList.reduce((s, b) => s + b.duration, 0) / batchList.length).toFixed(1) : "0";
 
   const openAddModal = () => {
     setEditingBatch(null);
-    setFormData({ ...emptyForm, roastDate: new Date().toISOString().split("T")[0] });
+    setFormData({
+      beanName: "", beanOrigin: "", greenWeight: 0, roastedWeight: 0,
+      roastDate: new Date().toISOString().split("T")[0], agtron: 55, duration: 0, temperature: 0, notes: "",
+    });
     setModalOpen(true);
   };
 
-  const openEditModal = (batch: RoastBatch) => {
+  const openEditModal = (batch: RoastBatchData) => {
     setEditingBatch(batch);
     setFormData({
       beanName: batch.beanName,
@@ -160,19 +172,28 @@ export default function Roasting() {
   const handleSave = () => {
     if (!formData.beanName.trim()) return;
 
-    if (editingBatch) {
-      setBatches((prev) =>
-        prev.map((b) => (b.id === editingBatch.id ? { ...b, ...formData } : b))
-      );
-    } else {
-      const newId = Math.max(0, ...batches.map((b) => b.id)) + 1;
-      setBatches((prev) => [{ id: newId, ...formData }, ...prev]);
-    }
+    const fd = new FormData();
+    fd.set("intent", editingBatch ? "update" : "create");
+    if (editingBatch) fd.set("id", editingBatch._id);
+    fd.set("beanName", formData.beanName);
+    fd.set("beanOrigin", formData.beanOrigin);
+    fd.set("greenWeight", String(formData.greenWeight));
+    fd.set("roastedWeight", String(formData.roastedWeight));
+    fd.set("roastDate", formData.roastDate);
+    fd.set("agtron", String(formData.agtron));
+    fd.set("duration", String(formData.duration));
+    fd.set("temperature", String(formData.temperature));
+    fd.set("notes", formData.notes);
+
+    fetcher.submit(fd, { method: "post" });
     closeModal();
   };
 
-  const handleDelete = (id: number) => {
-    setBatches((prev) => prev.filter((b) => b.id !== id));
+  const handleDelete = (id: string) => {
+    const fd = new FormData();
+    fd.set("intent", "delete");
+    fd.set("id", id);
+    fetcher.submit(fd, { method: "post" });
     setDeleteConfirm(null);
   };
 
@@ -201,7 +222,7 @@ export default function Roasting() {
         <div className="roast-stat-card">
           <span className="roast-stat-emoji">☕</span>
           <div className="roast-stat-content">
-            <span className="roast-stat-value">{batches.length}</span>
+            <span className="roast-stat-value">{batchList.length}</span>
             <span className="roast-stat-label">Total Batches</span>
           </div>
         </div>
@@ -230,18 +251,14 @@ export default function Roasting() {
 
       {/* Roast Cards */}
       <div className="roast-list" id="roast-list">
-        {batches.map((batch) => {
+        {batchList.map((batch) => {
           const agtronInfo = getAgtronInfo(batch.agtron);
           const weightLoss = ((1 - batch.roastedWeight / batch.greenWeight) * 100).toFixed(1);
-          const isExpanded = expandedId === batch.id;
+          const isExpanded = expandedId === batch._id;
 
           return (
-            <div
-              key={batch.id}
-              className={`roast-card ${isExpanded ? "roast-card--expanded" : ""}`}
-              id={`roast-${batch.id}`}
-            >
-              <div className="roast-card-main" onClick={() => setExpandedId(isExpanded ? null : batch.id)}>
+            <div key={batch._id} className={`roast-card ${isExpanded ? "roast-card--expanded" : ""}`} id={`roast-${batch._id}`}>
+              <div className="roast-card-main" onClick={() => setExpandedId(isExpanded ? null : batch._id)}>
                 <div className="roast-card-left">
                   <div className="roast-bean-icon">🫘</div>
                   <div className="roast-card-info">
@@ -266,10 +283,7 @@ export default function Roasting() {
                     <span className="roast-detail-label">Loss</span>
                     <span className="roast-detail-value">{weightLoss}%</span>
                   </div>
-                  <span
-                    className="roast-level-badge"
-                    style={{ background: agtronInfo.bg, color: agtronInfo.color }}
-                  >
+                  <span className="roast-level-badge" style={{ background: agtronInfo.bg, color: agtronInfo.color }}>
                     <span className="roast-level-dot" style={{ background: agtronInfo.dot }} />
                     #{batch.agtron} · {agtronInfo.label}
                   </span>
@@ -318,14 +332,14 @@ export default function Roasting() {
                       </svg>
                       Edit
                     </button>
-                    {deleteConfirm === batch.id ? (
+                    {deleteConfirm === batch._id ? (
                       <div className="roast-delete-confirm">
                         <span className="roast-delete-text">Delete this roast?</span>
-                        <button className="btn btn--danger btn--sm" onClick={() => handleDelete(batch.id)}>Yes, Delete</button>
+                        <button className="btn btn--danger btn--sm" onClick={() => handleDelete(batch._id)}>Yes, Delete</button>
                         <button className="btn btn--ghost btn--sm" onClick={() => setDeleteConfirm(null)}>Cancel</button>
                       </div>
                     ) : (
-                      <button className="btn btn--ghost btn--sm btn--danger-text" onClick={() => setDeleteConfirm(batch.id)}>
+                      <button className="btn btn--ghost btn--sm btn--danger-text" onClick={() => setDeleteConfirm(batch._id)}>
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
                           <polyline points="3 6 5 6 21 6" />
                           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -340,7 +354,7 @@ export default function Roasting() {
           );
         })}
 
-        {batches.length === 0 && (
+        {batchList.length === 0 && (
           <div className="empty-state">
             <span style={{ fontSize: 48, marginBottom: 12 }}>☕</span>
             <h2>No roasts logged yet</h2>
@@ -367,77 +381,35 @@ export default function Roasting() {
               <div className="form-row">
                 <div className="form-group form-group--wide">
                   <label className="form-label">Bean Name</label>
-                  <input
-                    className="form-input"
-                    type="text"
-                    value={formData.beanName}
-                    onChange={(e) => updateField("beanName", e.target.value)}
-                    placeholder="e.g. Ethiopian Yirgacheffe"
-                  />
+                  <input className="form-input" type="text" value={formData.beanName} onChange={(e) => updateField("beanName", e.target.value)} placeholder="e.g. Ethiopian Yirgacheffe" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Origin</label>
-                  <input
-                    className="form-input"
-                    type="text"
-                    value={formData.beanOrigin}
-                    onChange={(e) => updateField("beanOrigin", e.target.value)}
-                    placeholder="e.g. Ethiopia"
-                  />
+                  <input className="form-input" type="text" value={formData.beanOrigin} onChange={(e) => updateField("beanOrigin", e.target.value)} placeholder="e.g. Ethiopia" />
                 </div>
               </div>
 
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Green Weight (g)</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="0"
-                    value={formData.greenWeight}
-                    onChange={(e) => updateField("greenWeight", Number(e.target.value))}
-                  />
+                  <input className="form-input" type="number" min="0" value={formData.greenWeight} onChange={(e) => updateField("greenWeight", Number(e.target.value))} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Roasted Weight (g)</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="0"
-                    value={formData.roastedWeight}
-                    onChange={(e) => updateField("roastedWeight", Number(e.target.value))}
-                  />
+                  <input className="form-input" type="number" min="0" value={formData.roastedWeight} onChange={(e) => updateField("roastedWeight", Number(e.target.value))} />
                 </div>
               </div>
 
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Roast Date</label>
-                  <input
-                    className="form-input"
-                    type="date"
-                    value={formData.roastDate}
-                    onChange={(e) => updateField("roastDate", e.target.value)}
-                  />
+                  <input className="form-input" type="date" value={formData.roastDate} onChange={(e) => updateField("roastDate", e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Agtron Number</label>
                   <div className="agtron-input-wrapper">
-                    <input
-                      className="form-input"
-                      type="number"
-                      min="25"
-                      max="95"
-                      value={formData.agtron}
-                      onChange={(e) => updateField("agtron", Number(e.target.value))}
-                    />
-                    <span
-                      className="agtron-preview"
-                      style={{
-                        background: getAgtronInfo(formData.agtron).bg,
-                        color: getAgtronInfo(formData.agtron).color,
-                      }}
-                    >
+                    <input className="form-input" type="number" min="25" max="95" value={formData.agtron} onChange={(e) => updateField("agtron", Number(e.target.value))} />
+                    <span className="agtron-preview" style={{ background: getAgtronInfo(formData.agtron).bg, color: getAgtronInfo(formData.agtron).color }}>
                       <span className="roast-level-dot" style={{ background: getAgtronInfo(formData.agtron).dot }} />
                       {getAgtronInfo(formData.agtron).label}
                     </span>
@@ -449,46 +421,23 @@ export default function Roasting() {
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Duration (min)</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="0"
-                    value={formData.duration}
-                    onChange={(e) => updateField("duration", Number(e.target.value))}
-                  />
+                  <input className="form-input" type="number" min="0" value={formData.duration} onChange={(e) => updateField("duration", Number(e.target.value))} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Temperature (°F)</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="0"
-                    value={formData.temperature}
-                    onChange={(e) => updateField("temperature", Number(e.target.value))}
-                  />
+                  <input className="form-input" type="number" min="0" value={formData.temperature} onChange={(e) => updateField("temperature", Number(e.target.value))} />
                 </div>
               </div>
 
               <div className="form-group">
                 <label className="form-label">Notes</label>
-                <textarea
-                  className="form-input form-textarea"
-                  rows={3}
-                  value={formData.notes}
-                  onChange={(e) => updateField("notes", e.target.value)}
-                  placeholder="Tasting notes, observations, first/second crack times..."
-                />
+                <textarea className="form-input form-textarea" rows={3} value={formData.notes} onChange={(e) => updateField("notes", e.target.value)} placeholder="Tasting notes, observations, first/second crack times..." />
               </div>
             </div>
 
             <div className="modal-footer">
               <button className="btn btn--ghost" onClick={closeModal}>Cancel</button>
-              <button
-                className="btn btn--primary"
-                onClick={handleSave}
-                disabled={!formData.beanName.trim()}
-                id="btn-save-roast"
-              >
+              <button className="btn btn--primary" onClick={handleSave} disabled={!formData.beanName.trim()} id="btn-save-roast">
                 {editingBatch ? "Save Changes" : "Log Roast"}
               </button>
             </div>

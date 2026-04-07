@@ -6,12 +6,16 @@
     "build": "react-router build",
     "dev": "react-router dev",
     "start": "react-router-serve ./build/server/index.js",
-    "typecheck": "react-router typegen && tsc"
+    "typecheck": "react-router typegen && tsc",
+    "seed": "npx tsx app/db/seed.server.ts",
+    "db:reset": "npx tsx -e \"import 'dotenv/config'; import mongoose from 'mongoose'; await mongoose.connect(process.env.MONGODB_URI); await mongoose.connection.dropDatabase(); console.log('Database dropped'); process.exit(0);\""
   },
   "dependencies": {
     "@react-router/node": "7.14.0",
     "@react-router/serve": "7.14.0",
+    "dotenv": "^17.4.1",
     "isbot": "^5.1.36",
+    "mongoose": "^9.4.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router": "7.14.0"

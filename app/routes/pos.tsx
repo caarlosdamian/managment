@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useLoaderData } from "react-router";
 import type { Route } from "./+types/pos";
-import { initialInventory } from "~/data/products";
+import { connectDB } from "~/db/connection.server";
+import { InventoryItem } from "~/db/models/inventory.server";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -9,58 +11,75 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-interface CartItem {
-  id: number;
+// ─── Server Loader ────────────────────────────────────────
+export async function loader() {
+  await connectDB();
+  const items = await InventoryItem.find({ showInPOS: true, price: { $gt: 0 } })
+    .sort({ category: 1, name: 1 })
+    .lean();
+
+  return {
+    products: items.map((item) => ({
+      _id: item._id.toString(),
+      name: item.name,
+      price: item.price,
+      category: item.category,
+      emoji: item.emoji,
+    })),
+  };
+}
+
+// ─── Types ────────────────────────────────────────────────
+interface Product {
+  _id: string;
   name: string;
   price: number;
   category: string;
   emoji: string;
+}
+
+interface CartItem extends Product {
   quantity: number;
 }
 
-// Only show items flagged for POS
-const products = initialInventory
-  .filter((item) => item.showInPOS && item.price > 0)
-  .map(({ id, name, price, category, emoji }) => ({ id, name, price, category, emoji }));
-
-const categories = ["All", ...Array.from(new Set(products.map((p) => p.category)))];
-
+// ─── Component ────────────────────────────────────────────
 export default function POS() {
+  const { products } = useLoaderData<typeof loader>();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeCategory, setActiveCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCheckout, setShowCheckout] = useState(false);
 
-  const filteredProducts = products.filter((p) => {
+  const categories = ["All", ...Array.from(new Set((products as Product[]).map((p) => p.category)))];
+
+  const filteredProducts = (products as Product[]).filter((p) => {
     const matchesCategory = activeCategory === "All" || p.category === activeCategory;
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
-  const addToCart = (product: typeof products[number]) => {
+  const addToCart = (product: Product) => {
     setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
+      const existing = prev.find((item) => item._id === product._id);
       if (existing) {
         return prev.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item._id === product._id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
       return [...prev, { ...product, quantity: 1 }];
     });
   };
 
-  const updateQuantity = (id: number, delta: number) => {
+  const updateQuantity = (id: string, delta: number) => {
     setCart((prev) =>
       prev
-        .map((item) =>
-          item.id === id ? { ...item, quantity: item.quantity + delta } : item
-        )
+        .map((item) => (item._id === id ? { ...item, quantity: item.quantity + delta } : item))
         .filter((item) => item.quantity > 0)
     );
   };
 
-  const removeFromCart = (id: number) => {
-    setCart((prev) => prev.filter((item) => item.id !== id));
+  const removeFromCart = (id: string) => {
+    setCart((prev) => prev.filter((item) => item._id !== id));
   };
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -119,10 +138,10 @@ export default function POS() {
         <div className="pos-product-grid" id="pos-product-grid">
           {filteredProducts.map((product) => (
             <button
-              key={product.id}
+              key={product._id}
               className="pos-product-card"
               onClick={() => addToCart(product)}
-              id={`product-${product.id}`}
+              id={`product-${product._id}`}
             >
               <span className="pos-product-emoji">{product.emoji}</span>
               <span className="pos-product-name">{product.name}</span>
@@ -153,7 +172,7 @@ export default function POS() {
           <>
             <div className="pos-cart-items">
               {cart.map((item) => (
-                <div key={item.id} className="pos-cart-item" id={`cart-item-${item.id}`}>
+                <div key={item._id} className="pos-cart-item" id={`cart-item-${item._id}`}>
                   <div className="pos-cart-item-info">
                     <span className="pos-cart-item-emoji">{item.emoji}</span>
                     <div className="pos-cart-item-details">
@@ -163,30 +182,12 @@ export default function POS() {
                   </div>
                   <div className="pos-cart-item-actions">
                     <div className="pos-qty-control">
-                      <button
-                        className="pos-qty-btn"
-                        onClick={() => updateQuantity(item.id, -1)}
-                        aria-label="Decrease quantity"
-                      >
-                        −
-                      </button>
+                      <button className="pos-qty-btn" onClick={() => updateQuantity(item._id, -1)} aria-label="Decrease quantity">−</button>
                       <span className="pos-qty-value">{item.quantity}</span>
-                      <button
-                        className="pos-qty-btn"
-                        onClick={() => updateQuantity(item.id, 1)}
-                        aria-label="Increase quantity"
-                      >
-                        +
-                      </button>
+                      <button className="pos-qty-btn" onClick={() => updateQuantity(item._id, 1)} aria-label="Increase quantity">+</button>
                     </div>
-                    <span className="pos-cart-item-total">
-                      ${(item.price * item.quantity).toFixed(2)}
-                    </span>
-                    <button
-                      className="pos-remove-btn"
-                      onClick={() => removeFromCart(item.id)}
-                      aria-label="Remove item"
-                    >
+                    <span className="pos-cart-item-total">${(item.price * item.quantity).toFixed(2)}</span>
+                    <button className="pos-remove-btn" onClick={() => removeFromCart(item._id)} aria-label="Remove item">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="18" y1="6" x2="6" y2="18" />
                         <line x1="6" y1="6" x2="18" y2="18" />

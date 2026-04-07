@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useLoaderData, useFetcher } from "react-router";
 import type { Route } from "./+types/inventory";
-import { initialInventory, inventoryCategories, type InventoryItem } from "~/data/products";
+import { connectDB } from "~/db/connection.server";
+import { InventoryItem } from "~/db/models/inventory.server";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -9,23 +11,112 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
+// ─── Server Loader ────────────────────────────────────────
+export async function loader() {
+  await connectDB();
+  const items = await InventoryItem.find().sort({ name: 1 }).lean();
+  return {
+    items: items.map((item) => ({
+      _id: item._id.toString(),
+      name: item.name,
+      sku: item.sku,
+      category: item.category,
+      stock: item.stock,
+      minStock: item.minStock,
+      price: item.price,
+      cost: item.cost,
+      emoji: item.emoji,
+      showInPOS: item.showInPOS,
+    })),
+  };
+}
+
+// ─── Server Action ────────────────────────────────────────
+export async function action({ request }: Route.ActionArgs) {
+  await connectDB();
+  const formData = await request.formData();
+  const intent = formData.get("intent") as string;
+
+  switch (intent) {
+    case "create": {
+      await InventoryItem.create({
+        name: formData.get("name"),
+        sku: formData.get("sku"),
+        category: formData.get("category"),
+        stock: Number(formData.get("stock")),
+        minStock: Number(formData.get("minStock")),
+        price: Number(formData.get("price")),
+        cost: Number(formData.get("cost")),
+        emoji: formData.get("emoji"),
+        showInPOS: formData.get("showInPOS") === "true",
+      });
+      break;
+    }
+    case "update": {
+      const id = formData.get("id") as string;
+      await InventoryItem.findByIdAndUpdate(id, {
+        name: formData.get("name"),
+        sku: formData.get("sku"),
+        category: formData.get("category"),
+        stock: Number(formData.get("stock")),
+        minStock: Number(formData.get("minStock")),
+        price: Number(formData.get("price")),
+        cost: Number(formData.get("cost")),
+        emoji: formData.get("emoji"),
+        showInPOS: formData.get("showInPOS") === "true",
+      });
+      break;
+    }
+    case "delete": {
+      const id = formData.get("id") as string;
+      await InventoryItem.findByIdAndDelete(id);
+      break;
+    }
+    case "togglePOS": {
+      const id = formData.get("id") as string;
+      const item = await InventoryItem.findById(id);
+      if (item) {
+        item.showInPOS = !item.showInPOS;
+        await item.save();
+      }
+      break;
+    }
+  }
+
+  return { ok: true };
+}
+
+// ─── Types ────────────────────────────────────────────────
+interface InventoryItemData {
+  _id: string;
+  name: string;
+  sku: string;
+  category: string;
+  stock: number;
+  minStock: number;
+  price: number;
+  cost: number;
+  emoji: string;
+  showInPOS: boolean;
+}
+
 type SortField = "name" | "stock" | "price" | "cost";
 type SortDir = "asc" | "desc";
 
-const emptyForm: Omit<InventoryItem, "id"> = {
-  name: "", sku: "", category: "Beverages", stock: 0, minStock: 0, price: 0, cost: 0, emoji: "📦", showInPOS: true,
-};
-
+const inventoryCategories = ["Beverages", "Food", "Desserts", "Green Beans", "Supplies"];
 const emojiOptions = ["☕", "🥛", "🍫", "🍵", "🥤", "🥐", "🥯", "🧁", "🥪", "🥗", "🍪", "🍰", "🍦", "💧", "🫘", "📦"];
 
-function getStockStatus(item: InventoryItem) {
+function getStockStatus(item: InventoryItemData) {
   if (item.stock === 0) return { label: "Out of Stock", className: "inv-status--danger" };
   if (item.stock <= item.minStock) return { label: "Low Stock", className: "inv-status--warning" };
   return { label: "In Stock", className: "inv-status--success" };
 }
 
+// ─── Component ────────────────────────────────────────────
 export default function Inventory() {
-  const [items, setItems] = useState<InventoryItem[]>(initialInventory);
+  const { items } = useLoaderData<typeof loader>();
+  const fetcher = useFetcher();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
@@ -34,13 +125,15 @@ export default function Inventory() {
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-  const [formData, setFormData] = useState(emptyForm);
+  const [editingItem, setEditingItem] = useState<InventoryItemData | null>(null);
+  const [formData, setFormData] = useState({
+    name: "", sku: "", category: "Beverages", stock: 0, minStock: 0, price: 0, cost: 0, emoji: "📦", showInPOS: true,
+  });
 
   // Delete confirmation
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const categories = ["All", ...Array.from(new Set(items.map((i) => i.category)))];
+  const categories = ["All", ...Array.from(new Set(items.map((i: InventoryItemData) => i.category)))];
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -51,7 +144,7 @@ export default function Inventory() {
     }
   };
 
-  const filtered = items
+  const filtered = (items as InventoryItemData[])
     .filter((item) => {
       const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.sku.toLowerCase().includes(searchQuery.toLowerCase());
@@ -70,20 +163,20 @@ export default function Inventory() {
       return dir * (a[sortField] - b[sortField]);
     });
 
-  const totalItems = items.reduce((s, i) => s + i.stock, 0);
-  const lowStockCount = items.filter((i) => i.stock > 0 && i.stock <= i.minStock).length;
-  const outOfStockCount = items.filter((i) => i.stock === 0).length;
-  const totalValue = items.reduce((s, i) => s + i.stock * i.cost, 0);
-  const posItemCount = items.filter((i) => i.showInPOS).length;
+  const totalItems = items.reduce((s: number, i: InventoryItemData) => s + i.stock, 0);
+  const lowStockCount = items.filter((i: InventoryItemData) => i.stock > 0 && i.stock <= i.minStock).length;
+  const outOfStockCount = items.filter((i: InventoryItemData) => i.stock === 0).length;
+  const totalValue = items.reduce((s: number, i: InventoryItemData) => s + i.stock * i.cost, 0);
+  const posItemCount = items.filter((i: InventoryItemData) => i.showInPOS).length;
 
   // ── Modal handlers ─────────────────────────────────
   const openAddModal = () => {
     setEditingItem(null);
-    setFormData(emptyForm);
+    setFormData({ name: "", sku: "", category: "Beverages", stock: 0, minStock: 0, price: 0, cost: 0, emoji: "📦", showInPOS: true });
     setModalOpen(true);
   };
 
-  const openEditModal = (item: InventoryItem) => {
+  const openEditModal = (item: InventoryItemData) => {
     setEditingItem(item);
     setFormData({
       name: item.name,
@@ -107,30 +200,36 @@ export default function Inventory() {
   const handleSave = () => {
     if (!formData.name.trim() || !formData.sku.trim()) return;
 
-    if (editingItem) {
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === editingItem.id ? { ...item, ...formData } : item
-        )
-      );
-    } else {
-      const newId = Math.max(0, ...items.map((i) => i.id)) + 1;
-      setItems((prev) => [...prev, { id: newId, ...formData }]);
-    }
+    const fd = new FormData();
+    fd.set("intent", editingItem ? "update" : "create");
+    if (editingItem) fd.set("id", editingItem._id);
+    fd.set("name", formData.name);
+    fd.set("sku", formData.sku);
+    fd.set("category", formData.category);
+    fd.set("stock", String(formData.stock));
+    fd.set("minStock", String(formData.minStock));
+    fd.set("price", String(formData.price));
+    fd.set("cost", String(formData.cost));
+    fd.set("emoji", formData.emoji);
+    fd.set("showInPOS", String(formData.showInPOS));
+
+    fetcher.submit(fd, { method: "post" });
     closeModal();
   };
 
-  const handleDelete = (id: number) => {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+  const handleDelete = (id: string) => {
+    const fd = new FormData();
+    fd.set("intent", "delete");
+    fd.set("id", id);
+    fetcher.submit(fd, { method: "post" });
     setDeleteConfirm(null);
   };
 
-  const togglePOS = (id: number) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, showInPOS: !item.showInPOS } : item
-      )
-    );
+  const togglePOS = (id: string) => {
+    const fd = new FormData();
+    fd.set("intent", "togglePOS");
+    fd.set("id", id);
+    fetcher.submit(fd, { method: "post" });
   };
 
   const updateField = (field: string, value: string | number | boolean) => {
@@ -214,22 +313,12 @@ export default function Inventory() {
           />
         </div>
         <div className="inv-filters">
-          <select
-            className="inv-select"
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            id="inv-filter-category"
-          >
-            {categories.map((c) => (
+          <select className="inv-select" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} id="inv-filter-category">
+            {categories.map((c: string) => (
               <option key={c} value={c}>{c === "All" ? "All Categories" : c}</option>
             ))}
           </select>
-          <select
-            className="inv-select"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            id="inv-filter-status"
-          >
+          <select className="inv-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} id="inv-filter-status">
             <option value="All">All Status</option>
             <option value="In">In Stock</option>
             <option value="Low">Low Stock</option>
@@ -265,7 +354,7 @@ export default function Inventory() {
             {filtered.map((item) => {
               const status = getStockStatus(item);
               return (
-                <tr key={item.id} id={`inv-row-${item.id}`}>
+                <tr key={item._id} id={`inv-row-${item._id}`}>
                   <td>
                     <div className="inv-product-cell">
                       <span className="inv-product-emoji">{item.emoji}</span>
@@ -280,10 +369,8 @@ export default function Inventory() {
                       <div className="inv-stock-bar">
                         <div
                           className={`inv-stock-fill ${
-                            item.stock === 0
-                              ? "inv-stock-fill--danger"
-                              : item.stock <= item.minStock
-                              ? "inv-stock-fill--warning"
+                            item.stock === 0 ? "inv-stock-fill--danger"
+                              : item.stock <= item.minStock ? "inv-stock-fill--warning"
                               : "inv-stock-fill--ok"
                           }`}
                           style={{ width: `${Math.min(100, (item.stock / (item.minStock * 3)) * 100)}%` }}
@@ -291,16 +378,14 @@ export default function Inventory() {
                       </div>
                     </div>
                   </td>
-                  <td>
-                    <span className={`inv-status ${status.className}`}>{status.label}</span>
-                  </td>
+                  <td><span className={`inv-status ${status.className}`}>{status.label}</span></td>
                   <td>{item.price > 0 ? `$${item.price.toFixed(2)}` : "—"}</td>
                   <td>${item.cost.toFixed(2)}</td>
                   <td className="inv-value-cell">${(item.stock * item.cost).toFixed(2)}</td>
                   <td>
                     <button
                       className={`inv-pos-toggle ${item.showInPOS ? "inv-pos-toggle--on" : ""}`}
-                      onClick={() => togglePOS(item.id)}
+                      onClick={() => togglePOS(item._id)}
                       title={item.showInPOS ? "Visible in POS" : "Hidden from POS"}
                       aria-label="Toggle POS visibility"
                     >
@@ -311,33 +396,20 @@ export default function Inventory() {
                   </td>
                   <td>
                     <div className="inv-actions">
-                      <button
-                        className="inv-action-btn inv-action-btn--edit"
-                        onClick={() => openEditModal(item)}
-                        title="Edit"
-                        aria-label="Edit item"
-                      >
+                      <button className="inv-action-btn inv-action-btn--edit" onClick={() => openEditModal(item)} title="Edit" aria-label="Edit item">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                         </svg>
                       </button>
-                      {deleteConfirm === item.id ? (
+                      {deleteConfirm === item._id ? (
                         <div className="inv-delete-confirm">
-                          <button
-                            className="inv-action-btn inv-action-btn--danger"
-                            onClick={() => handleDelete(item.id)}
-                            title="Confirm delete"
-                          >
+                          <button className="inv-action-btn inv-action-btn--danger" onClick={() => handleDelete(item._id)} title="Confirm delete">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
                           </button>
-                          <button
-                            className="inv-action-btn"
-                            onClick={() => setDeleteConfirm(null)}
-                            title="Cancel"
-                          >
+                          <button className="inv-action-btn" onClick={() => setDeleteConfirm(null)} title="Cancel">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <line x1="18" y1="6" x2="6" y2="18" />
                               <line x1="6" y1="6" x2="18" y2="18" />
@@ -345,12 +417,7 @@ export default function Inventory() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          className="inv-action-btn inv-action-btn--delete"
-                          onClick={() => setDeleteConfirm(item.id)}
-                          title="Delete"
-                          aria-label="Delete item"
-                        >
+                        <button className="inv-action-btn inv-action-btn--delete" onClick={() => setDeleteConfirm(item._id)} title="Delete" aria-label="Delete item">
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                             <polyline points="3 6 5 6 21 6" />
                             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -364,9 +431,7 @@ export default function Inventory() {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={10} className="inv-no-results">
-                  No items match your filters.
-                </td>
+                <td colSpan={10} className="inv-no-results">No items match your filters.</td>
               </tr>
             )}
           </tbody>
@@ -391,24 +456,13 @@ export default function Inventory() {
               <div className="form-row">
                 <div className="form-group form-group--wide">
                   <label className="form-label">Product Name</label>
-                  <input
-                    className="form-input"
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => updateField("name", e.target.value)}
-                    placeholder="e.g. Espresso Beans"
-                  />
+                  <input className="form-input" type="text" value={formData.name} onChange={(e) => updateField("name", e.target.value)} placeholder="e.g. Espresso Beans" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Icon</label>
                   <div className="form-emoji-grid">
                     {emojiOptions.map((e) => (
-                      <button
-                        key={e}
-                        type="button"
-                        className={`form-emoji-btn ${formData.emoji === e ? "form-emoji-btn--active" : ""}`}
-                        onClick={() => updateField("emoji", e)}
-                      >
+                      <button key={e} type="button" className={`form-emoji-btn ${formData.emoji === e ? "form-emoji-btn--active" : ""}`} onClick={() => updateField("emoji", e)}>
                         {e}
                       </button>
                     ))}
@@ -419,21 +473,11 @@ export default function Inventory() {
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">SKU</label>
-                  <input
-                    className="form-input"
-                    type="text"
-                    value={formData.sku}
-                    onChange={(e) => updateField("sku", e.target.value)}
-                    placeholder="e.g. BEV-001"
-                  />
+                  <input className="form-input" type="text" value={formData.sku} onChange={(e) => updateField("sku", e.target.value)} placeholder="e.g. BEV-001" />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Category</label>
-                  <select
-                    className="form-input"
-                    value={formData.category}
-                    onChange={(e) => updateField("category", e.target.value)}
-                  >
+                  <select className="form-input" value={formData.category} onChange={(e) => updateField("category", e.target.value)}>
                     {inventoryCategories.map((c) => (
                       <option key={c} value={c}>{c}</option>
                     ))}
@@ -444,48 +488,22 @@ export default function Inventory() {
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Stock Quantity</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="0"
-                    value={formData.stock}
-                    onChange={(e) => updateField("stock", Number(e.target.value))}
-                  />
+                  <input className="form-input" type="number" min="0" value={formData.stock} onChange={(e) => updateField("stock", Number(e.target.value))} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Min Stock Level</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="0"
-                    value={formData.minStock}
-                    onChange={(e) => updateField("minStock", Number(e.target.value))}
-                  />
+                  <input className="form-input" type="number" min="0" value={formData.minStock} onChange={(e) => updateField("minStock", Number(e.target.value))} />
                 </div>
               </div>
 
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Price ($)</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) => updateField("price", Number(e.target.value))}
-                  />
+                  <input className="form-input" type="number" min="0" step="0.01" value={formData.price} onChange={(e) => updateField("price", Number(e.target.value))} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Cost ($)</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.cost}
-                    onChange={(e) => updateField("cost", Number(e.target.value))}
-                  />
+                  <input className="form-input" type="number" min="0" step="0.01" value={formData.cost} onChange={(e) => updateField("cost", Number(e.target.value))} />
                 </div>
               </div>
 
@@ -494,9 +512,7 @@ export default function Inventory() {
                 <div className="form-toggle-info">
                   <span className="form-toggle-title">Show in Point of Sale</span>
                   <span className="form-toggle-desc">
-                    {formData.showInPOS
-                      ? "This item will appear in the POS product grid"
-                      : "This item is inventory-only (e.g. raw materials)"}
+                    {formData.showInPOS ? "This item will appear in the POS product grid" : "This item is inventory-only (e.g. raw materials)"}
                   </span>
                 </div>
                 <button
@@ -514,12 +530,7 @@ export default function Inventory() {
 
             <div className="modal-footer">
               <button className="btn btn--ghost" onClick={closeModal}>Cancel</button>
-              <button
-                className="btn btn--primary"
-                onClick={handleSave}
-                disabled={!formData.name.trim() || !formData.sku.trim()}
-                id="btn-save-item"
-              >
+              <button className="btn btn--primary" onClick={handleSave} disabled={!formData.name.trim() || !formData.sku.trim()} id="btn-save-item">
                 {editingItem ? "Save Changes" : "Add Item"}
               </button>
             </div>
