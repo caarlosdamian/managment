@@ -797,6 +797,404 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   POS SESSION & SALES
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Session Bar ────────────────────────────────────────── */
+.pos-session-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(34, 197, 94, 0.03));
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 12px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+}
+
+.pos-session-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.pos-session-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #16a34a;
+}
+
+.pos-session-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.pos-session-meta {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.pos-close-btn {
+  color: #dc2626 !important;
+  border-color: rgba(220, 38, 38, 0.2) !important;
+}
+
+.pos-close-btn:hover {
+  background: rgba(220, 38, 38, 0.08) !important;
+}
+
+/* ── No Session / Open Register ────────────────────────── */
+.pos-no-session {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 70vh;
+}
+
+.pos-no-session-card {
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  padding: 48px 64px;
+  max-width: 480px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+}
+
+.pos-no-session-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.pos-no-session-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 8px;
+}
+
+.pos-no-session-desc {
+  font-size: 15px;
+  color: var(--color-text-muted);
+  margin-bottom: 32px;
+}
+
+.pos-today-preview {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.pos-today-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.pos-today-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.pos-today-stat-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn--lg {
+  padding: 14px 32px;
+  font-size: 16px;
+  gap: 8px;
+}
+
+/* ── Payment Method Modal ──────────────────────────────── */
+.pos-payment-total {
+  text-align: center;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06), rgba(99, 102, 241, 0.02));
+  border-radius: 16px;
+  margin-bottom: 20px;
+}
+
+.pos-payment-total-label {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pos-payment-total-value {
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.pos-payment-methods {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.pos-payment-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 12px;
+  border: 2px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pos-payment-option:hover {
+  border-color: var(--color-primary);
+  background: rgba(99, 102, 241, 0.04);
+}
+
+.pos-payment-option--active {
+  border-color: var(--color-primary);
+  background: rgba(99, 102, 241, 0.08);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.pos-payment-icon {
+  font-size: 32px;
+}
+
+.pos-payment-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.pos-payment-breakdown {
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+}
+
+/* ── Close Register Summary ────────────────────────────── */
+.pos-close-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.pos-close-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 12px;
+  background: var(--color-bg);
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+}
+
+.pos-close-stat-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pos-close-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+/* ── Sales Page ────────────────────────────────────────── */
+.sales-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 20px;
+  width: fit-content;
+}
+
+.sales-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sales-tab:hover {
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+.sales-tab--active {
+  color: white;
+  background: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.sales-tab--active svg {
+  stroke: white;
+}
+
+.sales-tab--active:hover {
+  color: white;
+  background: var(--color-primary);
+}
+
+.sales-row:hover {
+  background: rgba(99, 102, 241, 0.03);
+}
+
+.sales-date-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sales-date {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.sales-time {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.sales-items-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.sales-item-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--color-text);
+  white-space: nowrap;
+}
+
+.sales-item-chip--more {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.sales-payment-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sales-payment-badge--cash {
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+}
+
+.sales-payment-badge--credit {
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+}
+
+.sales-payment-badge--debit {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+
+/* ── Expanded Sale Details ─────────────────────────────── */
+.sales-expanded-row td {
+  padding: 0 !important;
+}
+
+.sales-expanded-content {
+  padding: 12px 24px 16px;
+  background: var(--color-bg);
+  border-top: 1px solid var(--color-border);
+}
+
+.sales-expanded-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sales-expanded-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.sales-expanded-emoji {
+  font-size: 18px;
+}
+
+.sales-expanded-name {
+  flex: 1;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.sales-expanded-qty {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.sales-expanded-price {
+  font-weight: 600;
+  color: var(--color-text);
+  min-width: 70px;
+  text-align: right;
+}
+
+.inv-status--default {
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+}
+
+/* ══════════════════════════════════════════════════════════════════
    INVENTORY STYLES
    ══════════════════════════════════════════════════════════════════ */
 
