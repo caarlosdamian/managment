@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Route } from "./+types/inventory";
+import { initialInventory, inventoryCategories, type InventoryItem } from "~/data/products";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -8,39 +9,14 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-interface InventoryItem {
-  id: number;
-  name: string;
-  sku: string;
-  category: string;
-  stock: number;
-  minStock: number;
-  price: number;
-  cost: number;
-  emoji: string;
-}
-
-const inventoryData: InventoryItem[] = [
-  { id: 1, name: "Espresso Beans", sku: "BEV-001", category: "Beverages", stock: 45, minStock: 20, price: 3.5, cost: 1.2, emoji: "☕" },
-  { id: 2, name: "Cappuccino Mix", sku: "BEV-002", category: "Beverages", stock: 32, minStock: 15, price: 4.5, cost: 1.8, emoji: "☕" },
-  { id: 3, name: "Latte Syrup", sku: "BEV-003", category: "Beverages", stock: 8, minStock: 10, price: 5.0, cost: 2.0, emoji: "🥛" },
-  { id: 4, name: "Mocha Powder", sku: "BEV-004", category: "Beverages", stock: 25, minStock: 10, price: 5.5, cost: 2.2, emoji: "🍫" },
-  { id: 5, name: "Green Tea Leaves", sku: "BEV-005", category: "Beverages", stock: 18, minStock: 10, price: 3.0, cost: 1.0, emoji: "🍵" },
-  { id: 6, name: "Smoothie Base", sku: "BEV-006", category: "Beverages", stock: 5, minStock: 12, price: 6.0, cost: 2.5, emoji: "🥤" },
-  { id: 7, name: "Croissants", sku: "FOD-001", category: "Food", stock: 24, minStock: 10, price: 3.5, cost: 1.5, emoji: "🥐" },
-  { id: 8, name: "Bagels", sku: "FOD-002", category: "Food", stock: 30, minStock: 15, price: 4.0, cost: 1.8, emoji: "🥯" },
-  { id: 9, name: "Muffins", sku: "FOD-003", category: "Food", stock: 3, minStock: 8, price: 3.0, cost: 1.2, emoji: "🧁" },
-  { id: 10, name: "Sandwich Bread", sku: "FOD-004", category: "Food", stock: 40, minStock: 20, price: 7.5, cost: 3.0, emoji: "🥪" },
-  { id: 11, name: "Salad Mix", sku: "FOD-005", category: "Food", stock: 12, minStock: 8, price: 8.0, cost: 3.5, emoji: "🥗" },
-  { id: 12, name: "Cookies", sku: "FOD-006", category: "Food", stock: 50, minStock: 20, price: 2.5, cost: 0.8, emoji: "🍪" },
-  { id: 13, name: "Cake Base", sku: "DES-001", category: "Desserts", stock: 15, minStock: 5, price: 5.0, cost: 2.0, emoji: "🍰" },
-  { id: 14, name: "Brownie Mix", sku: "DES-002", category: "Desserts", stock: 22, minStock: 10, price: 3.5, cost: 1.2, emoji: "🟫" },
-  { id: 15, name: "Ice Cream Tubs", sku: "DES-003", category: "Desserts", stock: 7, minStock: 10, price: 4.0, cost: 1.8, emoji: "🍦" },
-  { id: 16, name: "Bottled Water", sku: "BEV-007", category: "Beverages", stock: 100, minStock: 30, price: 1.5, cost: 0.3, emoji: "💧" },
-];
-
 type SortField = "name" | "stock" | "price" | "cost";
 type SortDir = "asc" | "desc";
+
+const emptyForm: Omit<InventoryItem, "id"> = {
+  name: "", sku: "", category: "Beverages", stock: 0, minStock: 0, price: 0, cost: 0, emoji: "📦", showInPOS: true,
+};
+
+const emojiOptions = ["☕", "🥛", "🍫", "🍵", "🥤", "🥐", "🥯", "🧁", "🥪", "🥗", "🍪", "🍰", "🍦", "💧", "🫘", "📦"];
 
 function getStockStatus(item: InventoryItem) {
   if (item.stock === 0) return { label: "Out of Stock", className: "inv-status--danger" };
@@ -49,13 +25,22 @@ function getStockStatus(item: InventoryItem) {
 }
 
 export default function Inventory() {
+  const [items, setItems] = useState<InventoryItem[]>(initialInventory);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
-  const categories = ["All", ...Array.from(new Set(inventoryData.map((i) => i.category)))];
+  // Modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [formData, setFormData] = useState(emptyForm);
+
+  // Delete confirmation
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+
+  const categories = ["All", ...Array.from(new Set(items.map((i) => i.category)))];
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -66,7 +51,7 @@ export default function Inventory() {
     }
   };
 
-  const filtered = inventoryData
+  const filtered = items
     .filter((item) => {
       const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.sku.toLowerCase().includes(searchQuery.toLowerCase());
@@ -85,10 +70,72 @@ export default function Inventory() {
       return dir * (a[sortField] - b[sortField]);
     });
 
-  const totalItems = inventoryData.reduce((s, i) => s + i.stock, 0);
-  const lowStockCount = inventoryData.filter((i) => i.stock > 0 && i.stock <= i.minStock).length;
-  const outOfStockCount = inventoryData.filter((i) => i.stock === 0).length;
-  const totalValue = inventoryData.reduce((s, i) => s + i.stock * i.cost, 0);
+  const totalItems = items.reduce((s, i) => s + i.stock, 0);
+  const lowStockCount = items.filter((i) => i.stock > 0 && i.stock <= i.minStock).length;
+  const outOfStockCount = items.filter((i) => i.stock === 0).length;
+  const totalValue = items.reduce((s, i) => s + i.stock * i.cost, 0);
+  const posItemCount = items.filter((i) => i.showInPOS).length;
+
+  // ── Modal handlers ─────────────────────────────────
+  const openAddModal = () => {
+    setEditingItem(null);
+    setFormData(emptyForm);
+    setModalOpen(true);
+  };
+
+  const openEditModal = (item: InventoryItem) => {
+    setEditingItem(item);
+    setFormData({
+      name: item.name,
+      sku: item.sku,
+      category: item.category,
+      stock: item.stock,
+      minStock: item.minStock,
+      price: item.price,
+      cost: item.cost,
+      emoji: item.emoji,
+      showInPOS: item.showInPOS,
+    });
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingItem(null);
+  };
+
+  const handleSave = () => {
+    if (!formData.name.trim() || !formData.sku.trim()) return;
+
+    if (editingItem) {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === editingItem.id ? { ...item, ...formData } : item
+        )
+      );
+    } else {
+      const newId = Math.max(0, ...items.map((i) => i.id)) + 1;
+      setItems((prev) => [...prev, { id: newId, ...formData }]);
+    }
+    closeModal();
+  };
+
+  const handleDelete = (id: number) => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    setDeleteConfirm(null);
+  };
+
+  const togglePOS = (id: number) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, showInPOS: !item.showInPOS } : item
+      )
+    );
+  };
+
+  const updateField = (field: string, value: string | number | boolean) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
 
   const SortIcon = ({ field }: { field: SortField }) => (
     <span className={`inv-sort-icon ${sortField === field ? "inv-sort-icon--active" : ""}`}>
@@ -98,9 +145,18 @@ export default function Inventory() {
 
   return (
     <div className="page page--wide" id="inventory-page">
-      <div className="page-header">
-        <h1 className="page-title">Inventory</h1>
-        <p className="page-subtitle">Track stock levels and manage your products</p>
+      <div className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h1 className="page-title">Inventory</h1>
+          <p className="page-subtitle">Track stock levels and manage your products</p>
+        </div>
+        <button className="btn btn--primary" onClick={openAddModal} id="btn-add-item">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 18, height: 18 }}>
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Item
+        </button>
       </div>
 
       {/* Stats */}
@@ -131,6 +187,13 @@ export default function Inventory() {
           <div className="inv-stat-content">
             <span className="inv-stat-value">${totalValue.toFixed(0)}</span>
             <span className="inv-stat-label">Inventory Value</span>
+          </div>
+        </div>
+        <div className="inv-stat-card">
+          <div className="inv-stat-dot" style={{ background: "#6366f1" }} />
+          <div className="inv-stat-content">
+            <span className="inv-stat-value">{posItemCount}</span>
+            <span className="inv-stat-label">In POS</span>
           </div>
         </div>
       </div>
@@ -194,6 +257,8 @@ export default function Inventory() {
                 Cost <SortIcon field="cost" />
               </th>
               <th>Value</th>
+              <th>POS</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -229,15 +294,77 @@ export default function Inventory() {
                   <td>
                     <span className={`inv-status ${status.className}`}>{status.label}</span>
                   </td>
-                  <td>${item.price.toFixed(2)}</td>
+                  <td>{item.price > 0 ? `$${item.price.toFixed(2)}` : "—"}</td>
                   <td>${item.cost.toFixed(2)}</td>
                   <td className="inv-value-cell">${(item.stock * item.cost).toFixed(2)}</td>
+                  <td>
+                    <button
+                      className={`inv-pos-toggle ${item.showInPOS ? "inv-pos-toggle--on" : ""}`}
+                      onClick={() => togglePOS(item.id)}
+                      title={item.showInPOS ? "Visible in POS" : "Hidden from POS"}
+                      aria-label="Toggle POS visibility"
+                    >
+                      <span className="inv-pos-toggle-track">
+                        <span className="inv-pos-toggle-thumb" />
+                      </span>
+                    </button>
+                  </td>
+                  <td>
+                    <div className="inv-actions">
+                      <button
+                        className="inv-action-btn inv-action-btn--edit"
+                        onClick={() => openEditModal(item)}
+                        title="Edit"
+                        aria-label="Edit item"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
+                      {deleteConfirm === item.id ? (
+                        <div className="inv-delete-confirm">
+                          <button
+                            className="inv-action-btn inv-action-btn--danger"
+                            onClick={() => handleDelete(item.id)}
+                            title="Confirm delete"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          </button>
+                          <button
+                            className="inv-action-btn"
+                            onClick={() => setDeleteConfirm(null)}
+                            title="Cancel"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          className="inv-action-btn inv-action-btn--delete"
+                          onClick={() => setDeleteConfirm(item.id)}
+                          title="Delete"
+                          aria-label="Delete item"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="inv-no-results">
+                <td colSpan={10} className="inv-no-results">
                   No items match your filters.
                 </td>
               </tr>
@@ -245,6 +372,160 @@ export default function Inventory() {
           </tbody>
         </table>
       </div>
+
+      {/* ── Add/Edit Modal ──────────────────────────────── */}
+      {modalOpen && (
+        <div className="modal-overlay" onClick={closeModal} id="inventory-modal">
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">{editingItem ? "Edit Item" : "Add New Item"}</h2>
+              <button className="modal-close" onClick={closeModal} aria-label="Close modal">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="form-row">
+                <div className="form-group form-group--wide">
+                  <label className="form-label">Product Name</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => updateField("name", e.target.value)}
+                    placeholder="e.g. Espresso Beans"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Icon</label>
+                  <div className="form-emoji-grid">
+                    {emojiOptions.map((e) => (
+                      <button
+                        key={e}
+                        type="button"
+                        className={`form-emoji-btn ${formData.emoji === e ? "form-emoji-btn--active" : ""}`}
+                        onClick={() => updateField("emoji", e)}
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">SKU</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={formData.sku}
+                    onChange={(e) => updateField("sku", e.target.value)}
+                    placeholder="e.g. BEV-001"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Category</label>
+                  <select
+                    className="form-input"
+                    value={formData.category}
+                    onChange={(e) => updateField("category", e.target.value)}
+                  >
+                    {inventoryCategories.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Stock Quantity</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    min="0"
+                    value={formData.stock}
+                    onChange={(e) => updateField("stock", Number(e.target.value))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Min Stock Level</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    min="0"
+                    value={formData.minStock}
+                    onChange={(e) => updateField("minStock", Number(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Price ($)</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.price}
+                    onChange={(e) => updateField("price", Number(e.target.value))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Cost ($)</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.cost}
+                    onChange={(e) => updateField("cost", Number(e.target.value))}
+                  />
+                </div>
+              </div>
+
+              {/* Show in POS toggle */}
+              <div className="form-toggle-row">
+                <div className="form-toggle-info">
+                  <span className="form-toggle-title">Show in Point of Sale</span>
+                  <span className="form-toggle-desc">
+                    {formData.showInPOS
+                      ? "This item will appear in the POS product grid"
+                      : "This item is inventory-only (e.g. raw materials)"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className={`inv-pos-toggle ${formData.showInPOS ? "inv-pos-toggle--on" : ""}`}
+                  onClick={() => updateField("showInPOS", !formData.showInPOS)}
+                  aria-label="Toggle POS visibility"
+                >
+                  <span className="inv-pos-toggle-track">
+                    <span className="inv-pos-toggle-thumb" />
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn--ghost" onClick={closeModal}>Cancel</button>
+              <button
+                className="btn btn--primary"
+                onClick={handleSave}
+                disabled={!formData.name.trim() || !formData.sku.trim()}
+                id="btn-save-item"
+              >
+                {editingItem ? "Save Changes" : "Add Item"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Route } from "./+types/pos";
+import { initialInventory } from "~/data/products";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -8,36 +9,19 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-interface Product {
+interface CartItem {
   id: number;
   name: string;
   price: number;
   category: string;
   emoji: string;
-}
-
-interface CartItem extends Product {
   quantity: number;
 }
 
-const products: Product[] = [
-  { id: 1, name: "Espresso", price: 3.5, category: "Beverages", emoji: "☕" },
-  { id: 2, name: "Cappuccino", price: 4.5, category: "Beverages", emoji: "☕" },
-  { id: 3, name: "Latte", price: 5.0, category: "Beverages", emoji: "🥛" },
-  { id: 4, name: "Mocha", price: 5.5, category: "Beverages", emoji: "🍫" },
-  { id: 5, name: "Green Tea", price: 3.0, category: "Beverages", emoji: "🍵" },
-  { id: 6, name: "Smoothie", price: 6.0, category: "Beverages", emoji: "🥤" },
-  { id: 7, name: "Croissant", price: 3.5, category: "Food", emoji: "🥐" },
-  { id: 8, name: "Bagel", price: 4.0, category: "Food", emoji: "🥯" },
-  { id: 9, name: "Muffin", price: 3.0, category: "Food", emoji: "🧁" },
-  { id: 10, name: "Sandwich", price: 7.5, category: "Food", emoji: "🥪" },
-  { id: 11, name: "Salad", price: 8.0, category: "Food", emoji: "🥗" },
-  { id: 12, name: "Cookie", price: 2.5, category: "Food", emoji: "🍪" },
-  { id: 13, name: "Cake Slice", price: 5.0, category: "Desserts", emoji: "🍰" },
-  { id: 14, name: "Brownie", price: 3.5, category: "Desserts", emoji: "🟫" },
-  { id: 15, name: "Ice Cream", price: 4.0, category: "Desserts", emoji: "🍦" },
-  { id: 16, name: "Water", price: 1.5, category: "Beverages", emoji: "💧" },
-];
+// Only show items flagged for POS
+const products = initialInventory
+  .filter((item) => item.showInPOS && item.price > 0)
+  .map(({ id, name, price, category, emoji }) => ({ id, name, price, category, emoji }));
 
 const categories = ["All", ...Array.from(new Set(products.map((p) => p.category)))];
 
@@ -53,7 +37,7 @@ export default function POS() {
     return matchesCategory && matchesSearch;
   });
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: typeof products[number]) => {
     setCart((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {

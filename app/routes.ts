@@ -10,6 +10,7 @@ export default [
     index("routes/home.tsx"),
     route("pos", "routes/pos.tsx"),
     route("inventory", "routes/inventory.tsx"),
+    route("roasting", "routes/roasting.tsx"),
     route("projects", "routes/projects.tsx"),
     route("team", "routes/team.tsx"),
     route("calendar", "routes/calendar.tsx"),
